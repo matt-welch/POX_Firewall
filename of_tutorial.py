@@ -160,4 +160,4 @@ def launch (configuration=""):
   core.openflow.addListenerByName("ConnectionUp", start_switch)
 
 
-config = []
+config = [] #declaring it here puts it in the "main" frame so it can be referred to globally
