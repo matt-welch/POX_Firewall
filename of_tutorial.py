@@ -116,8 +116,8 @@ class Tutorial (object):
     # add rule to allow ALL ARP packets
     setupProtocolFlow(self, pkt.arp.REQUEST, pkt.ethernet.ARP_TYPE)
     setupProtocolFlow(self, pkt.arp.REPLY, pkt.ethernet.ARP_TYPE)
-    setupProtocolFlow(self, pkt.arp.REV_REQUEST, pkt.ethernet.RARP_TYPE)
-    setupProtocolFlow(self, pkt.arp.REV_REPLY, pkt.ethernet.RARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REV_REQUEST, pkt.ethernet.ARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REV_REPLY, pkt.ethernet.ARP_TYPE)
 
   def resend_packet (self, packet_in, out_port):
     """
@@ -257,5 +257,5 @@ dstIP = 2
 dstPort = 3
 
 DEBUGMODE=True # controls printing output like the parse_config output, etc.
-VERBOSEMODE=True # controls printing of the function names when they are called
+VERBOSEMODE=False # controls printing of the function names when they are called
 
