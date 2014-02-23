@@ -50,7 +50,36 @@ class Tutorial (object):
     # which switch port (keys are MACs, values are ports).
     self.mac_to_port = {}
 
+    # Insert flows from config list
+    global config
+    for rule in config:
+      msg = of.ofp_flow_mod()
+      match = of.ofp_match()
+      if rule[srcIP] != 'any':
+        match.nw_src = rule[srcIP]
+      else:
+        match.nw_src = None
+      if rule[dstIP] != 'any':
+        match.nw_dst = rule[dstIP]
+      else:
+        match.nw_dst = None
+      if rule[srcPort] != 'any':
+        match.tp_src = rule[srcPort]
+      else:
+        match.tp_src = None
+      if rule[dstPort] != "any":  
+        match.tp_dst = rule[dstPort]
+      else:
+        match.tp_dst = None
+      msg.match = match
+      msg.hard_timeout = 0
+      msg.priority = 2
+      action = of.ofp_action_output(port = of.OFPP_CONTROLLER)  
+      msg.actions.append(action)
+      self.connection. send(msg)
 
+
+      
   def resend_packet (self, packet_in, out_port):
     """
     Instructs the switch to resend a packet that it had sent to us.
@@ -89,22 +118,20 @@ class Tutorial (object):
     packet.src is (ethernet) source IP, packet.dst is (ethernet) dest IP
     packet_in.in_port is switch port it arrived on
     """
-    #print packet.src
-    #print packet.dst
-   # print dir(packet)
     print "Packet Type: ", packet.type
     if packet.type == packet.ARP_TYPE: 
       print "ARP"
     if packet.type == packet.IP_TYPE:
       ip_packet = packet.payload
-      #print "srcip: ", ip_packet.srcip
-      #print "dstip: ", ip_packet.dstip
       if ip_packet.protocol == ip_packet.TCP_PROTOCOL:
         tcp_packet = ip_packet.payload
-        #print "srcport: ", tcp_packet.srcport
         fields = [str(ip_packet.srcip), str(tcp_packet.srcport), str(ip_packet.dstip), str(tcp_packet.dstport)]
-	print Tutorial.check_config(self, fields)
-    
+	if Tutorial.check_config(self, fields):
+          allowed = True
+        else:
+          allowed = False
+   
+ 
     # Learn the port for the source MAC
     self.mac_to_port[packet.src] = packet_in.in_port
 
@@ -112,10 +139,6 @@ class Tutorial (object):
     if packet.dst in self.mac_to_port: # the port associated with the destination MAC of the packet is known:
       # Send packet out the associated port
       self.resend_packet(packet_in, self.mac_to_port[packet.dst])
-
-      # Once you have the above working, try pushing a flow entry
-      # instead of resending the packet (comment out the above and
-      # uncomment and complete the below.)
 
       log.debug("Installing flow...from " + str(packet.src) + ", " + str(packet_in.in_port) + " to " + str(packet.dst) + ", " +  str(self.mac_to_port[packet.dst]))
 
@@ -126,7 +149,7 @@ class Tutorial (object):
       
       #< Set other fields of flow_mod (timeouts? buffer_id?) >
       msg.idle_timeout = 180
-      msg.hard_timeout = 60
+      msg.hard_timeout = 0
       msg.match.buffer_id = packet_in.buffer_id
       #< Add an output action, and send -- similar to resend_packet() >
       action = of.ofp_action_output(port = self.mac_to_port[packet.dst])
@@ -157,6 +180,7 @@ def parse_config(configuration):
   for line in fin:
     rule = line.split()
     config.append(rule)
+  print config
 
 # to call, misc.of_tutorial --configuration=<path to config file>
 def launch (configuration=""):
@@ -177,6 +201,7 @@ srcIP = 0
 srcPort = 1
 dstIP = 2
 dstPort = 3
+
 
 
 
