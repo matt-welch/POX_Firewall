@@ -33,7 +33,17 @@ class Tutorial (object):
   A Tutorial object is created for each switch that connects.
   A Connection object for that switch is passed to the __init__ function.
   """
+  config = [] #rules for firewall
+
+  def parseconfig(self):
+    fin = open('/home/mininet/pox/pox/misc/mininetconfig.txt')
+    for line in fin:
+      rule = line.split()
+      Tutorial.config.append(rule)
+    print Tutorial.config
+
   def __init__ (self, connection):
+    self.parseconfig()
     # Keep track of the connection to the switch so that we can
     # send it messages!
     self.connection = connection
@@ -83,10 +93,6 @@ class Tutorial (object):
     """
     Implement switch-like behavior.
     """
-
-
-    # Here's some psuedocode to start you off implementing a learning
-    # switch.  You'll need to rewrite it as real Python code.
 
     # Learn the port for the source MAC
     self.mac_to_port[packet.src] = packet_in.in_port
@@ -139,20 +145,16 @@ class Tutorial (object):
     # when starting the exercise.
     #self.act_like_hub(packet, packet_in)
     self.act_like_switch(packet, packet_in)
+  
 
-def startup():
-    fin = open('/home/mininet/pox/pox/POX_Firewall/configs/mininetconfig.txt')
-    config = []
-    for line in fin:
-      rule = line.split()
-      config.append(rule)
-    print config
+
+
+
 
 def launch ():
   """
   Starts the component
   """
-  startup()
 
   def start_switch (event):
     log.debug("Controlling %s" % (event.connection,))
