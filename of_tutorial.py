@@ -23,7 +23,9 @@ It's roughly similar to the one Brandon Heller did for NOX.
 
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
-
+#import pox.lib.packet.packet_base
+#import pox.lib.packet.packet_utils
+import pox.lib.packet as pkt
 log = core.getLogger()
 
 
@@ -65,28 +67,44 @@ class Tutorial (object):
     # Send message to switch
     self.connection.send(msg)
 
-
-  def act_like_hub (self, packet, packet_in):
-    """
-    Implement hub-like behavior -- send all packets to all ports besides
-    the input port.
-    """
-
-    # We want to output to all ports -- we do that using the special
-    # OFPP_ALL port as the output port.  (We could have also used
-    # OFPP_FLOOD.)
-    self.resend_packet(packet_in, of.OFPP_ALL)
-
-    # Note that if we didn't get a valid buffer_id, a slightly better
-    # implementation would check that we got the full data before
-    # sending it (len(packet_in.data) should be == packet_in.total_len)).
+  
+  def check_config (self, fields):
+    print fields
+    global config, srcIP, srcPort, dstIP, dstPort
+    flag = False
+    for rule in config:
+      if fields[srcIP] == rule[srcIP] or rule[srcIP] == 'any':
+        if fields[srcPort] == rule[srcPort] or rule[srcPort] == 'any':
+          if fields[dstIP] == rule[dstIP] or rule[dstIP] == 'any':
+            if fields[dstPort] == rule[dstPort] or rule[dstPort] == 'any':
+              print rule
+              flag = True
+              break
+    return flag    
 
 
   def act_like_switch (self, packet, packet_in):
     """
     Implement switch-like behavior.
+    packet.src is (ethernet) source IP, packet.dst is (ethernet) dest IP
+    packet_in.in_port is switch port it arrived on
     """
-
+    #print packet.src
+    #print packet.dst
+   # print dir(packet)
+    print "Packet Type: ", packet.type
+    if packet.type == packet.ARP_TYPE: 
+      print "ARP"
+    if packet.type == packet.IP_TYPE:
+      ip_packet = packet.payload
+      #print "srcip: ", ip_packet.srcip
+      #print "dstip: ", ip_packet.dstip
+      if ip_packet.protocol == ip_packet.TCP_PROTOCOL:
+        tcp_packet = ip_packet.payload
+        #print "srcport: ", tcp_packet.srcport
+        fields = [str(ip_packet.srcip), str(tcp_packet.srcport), str(ip_packet.dstip), str(tcp_packet.dstport)]
+	print Tutorial.check_config(self, fields)
+    
     # Learn the port for the source MAC
     self.mac_to_port[packet.src] = packet_in.in_port
 
@@ -100,7 +118,6 @@ class Tutorial (object):
       # uncomment and complete the below.)
 
       log.debug("Installing flow...from " + str(packet.src) + ", " + str(packet_in.in_port) + " to " + str(packet.dst) + ", " +  str(self.mac_to_port[packet.dst]))
-      # Maybe the log statement should have source/destination/port?
 
       msg = of.ofp_flow_mod()
       
@@ -108,7 +125,7 @@ class Tutorial (object):
       msg.match = of.ofp_match.from_packet(packet)
       
       #< Set other fields of flow_mod (timeouts? buffer_id?) >
-      msg.idle_timeout = 10
+      msg.idle_timeout = 180
       msg.hard_timeout = 60
       msg.match.buffer_id = packet_in.buffer_id
       #< Add an output action, and send -- similar to resend_packet() >
@@ -126,21 +143,15 @@ class Tutorial (object):
     """
     Handles packet in messages from the switch.
     """
-
     packet = event.parsed # This is the parsed packet data.
     if not packet.parsed:
       log.warning("Ignoring incomplete packet")
       return
-
     packet_in = event.ofp # The actual ofp_packet_in message.
-
-    # Comment out the following line and uncomment the one after
-    # when starting the exercise.
-    #self.act_like_hub(packet, packet_in)
     self.act_like_switch(packet, packet_in)
   
 
-def parseconfig(configuration): 
+def parse_config(configuration): 
   global config
   fin = open(configuration)
   for line in fin:
@@ -152,7 +163,7 @@ def launch (configuration=""):
   """
   Starts the component
   """
-  parseconfig(configuration) #calls parseconfig method and passes string from command line
+  parse_config(configuration) #calls parseconfig method and passes string from command line
   
   def start_switch (event):
     log.debug("Controlling %s" % (event.connection,))
@@ -161,3 +172,11 @@ def launch (configuration=""):
 
 
 config = [] #declaring it here puts it in the "main" frame so it can be referred to globally
+# like macros for the config list config[0][src] gets you the src for the 1st rule, etc.
+srcIP = 0
+srcPort = 1
+dstIP = 2
+dstPort = 3
+
+
+
