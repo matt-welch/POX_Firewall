@@ -37,6 +37,27 @@ class Tutorial (object):
   """
 
   def __init__ (self, connection):
+
+    def setupProtocolFlow (self, nw_proto, dl_type):
+        msg = of.ofp_flow_mod()
+        match = of.ofp_match()
+        match.nw_src = None
+        match.nw_dst = None
+        match.tp_src = None
+        match.tp_dst = None
+        match.nw_proto = nw_proto # 1 for ICMP or ARP opcode
+        match.dl_type = dl_type # == 0x0800 for IP, 0x0806 for ARP
+        msg.match = match
+        msg.hard_timeout = 0
+        msg.soft_timeout = 0
+        msg.priority = 2
+        action = of.ofp_action_output(port = of.OFPP_CONTROLLER)
+        msg.actions.append(action)
+        if (VERBOSEMODE):
+            print "Inserting flow for: " + msg.__str__()
+        self.connection. send(msg)
+
+
     global config
     if DEBUGMODE is True:
         print config
@@ -67,21 +88,36 @@ class Tutorial (object):
         else:
             match.nw_dst = None
         if rule[srcPort] != 'any':
-            match.tp_src = rule[srcPort]
+            match.tp_src = int(rule[srcPort]) # must convert the string to an int??
         else:
             match.tp_src = None
         if rule[dstPort] != "any":
-            match.tp_dst = rule[dstPort]
+            match.tp_dst = int(rule[dstPort]) # must convert the string to an int??
         else:
             match.tp_dst = None
+        # specify the IP protocol or lower 8 bits of ARP opcode
+        # all packets to match on are TCP
+        match.nw_proto = pkt.ipv4.TCP_PROTOCOL # == 6
+        # specify all packets as IP
+        match.dl_type = pkt.ethernet.IP_TYPE # == 0x0800
         msg.match = match
         msg.hard_timeout = 0
+        msg.soft_timeout = 0
         msg.priority = 2
         action = of.ofp_action_output(port = of.OFPP_CONTROLLER)
         msg.actions.append(action)
+        if (VERBOSEMODE):
+            print "Inserting flow for: " + msg.__str__()
         self.connection. send(msg)
 
+    # add rule to allow ALL ICMP packets
+    setupProtocolFlow(self, pkt.ipv4.ICMP_PROTOCOL, pkt.ethernet.IP_TYPE)
 
+    # add rule to allow ALL ARP packets
+    setupProtocolFlow(self, pkt.arp.REQUEST, pkt.ethernet.ARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REPLY, pkt.ethernet.ARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REV_REQUEST, pkt.ethernet.RARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REV_REPLY, pkt.ethernet.RARP_TYPE)
 
   def resend_packet (self, packet_in, out_port):
     """
@@ -90,7 +126,7 @@ class Tutorial (object):
     controller due to a table-miss.
     """
     if VERBOSEMODE:
-        print "resend_packet"
+        print "resend_packet()"
     msg = of.ofp_packet_out()
     msg.data = packet_in
 
