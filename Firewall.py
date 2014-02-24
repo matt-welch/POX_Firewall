@@ -1,25 +1,16 @@
-# Copyright 2012 James McCauley
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at:
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-
 """
-This component is for use with the OpenFlow tutorial.
-
-It acts as a simple hub, but can be modified to act like an L2
-learning switch.
-
-It's roughly similar to the one Brandon Heller did for NOX.
-
+Team 5 - Ben Boren, Erin Lanus, Matt Welch
+Firewall.py implements firewall-like functionality for POX. The code uses
+of_tutorial.py (Copyright 2012 James McCauley) as a skeleton. When a switch
+connects to the controller, the component initializes the connection to the
+switch as well as adding low-priority flow entries  to allow certain types
+of packets to pass through (i.e. ICMP, IP, ARP), but block all TCP packets
+that are not specified by a rule in the firewall configuration file. It
+pushes medium priority flow entries for rules from the configuration file.
+When it receives a packet, it checks the configuration rules to ensure that
+there is a match, then pushes symmetric flow entries from the packet specifics.
+If there is not a match, it pushes a flow entry with null action, so the switch
+will drop packets from that flow.
 """
 
 from pox.core import core
@@ -294,7 +285,8 @@ def parse_config(configuration):
   fin = open(configuration)
   for line in fin:
     rule = line.split()
-    config.append(rule)
+    if (len(rule) > 0) : # only make a rule if the line is not empty
+        config.append(rule)
   if (False):
     print config
 
