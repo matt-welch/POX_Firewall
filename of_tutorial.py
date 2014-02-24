@@ -74,8 +74,36 @@ class Tutorial (object):
     # which switch port (keys are MACs, values are ports).
     self.mac_to_port = {}
 
+    # establish base rules for ICMP, ARP, and dropping unknown packets
+    if(DEBUGMODE):
+        print "Inserting icmp packet flow"
+    # add rule to allow ALL ICMP packets
+    setupProtocolFlow(self, pkt.ipv4.ICMP_PROTOCOL, pkt.ethernet.IP_TYPE)
+
+    if(DEBUGMODE):
+        print "Inserting arp packet flows"
+    # add rule to allow ALL ARP packets
+    setupProtocolFlow(self, pkt.arp.REQUEST, pkt.ethernet.ARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REPLY, pkt.ethernet.ARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REV_REQUEST, pkt.ethernet.ARP_TYPE)
+    setupProtocolFlow(self, pkt.arp.REV_REPLY, pkt.ethernet.ARP_TYPE)
+
+    # add rule to drop all packets not defined by another rule
+    msg = of.ofp_flow_mod()
+    match = of.ofp_match()
+    msg.match = match
+    msg.hard_timeout = 0
+    msg.soft_timeout = 0
+    msg.priority = 1
+
+    if(DEBUGMODE):
+        print "Inserting drop packet flow"
+    if (VERBOSEMODE):
+        print "Inserting flow for drop packets: " + msg.__str__()
+    self.connection.send(msg)
+
     # Insert flows from config list
-    #global config
+    # these rules allow the specified hosts to establish flows that match on the addresses and wildcards
     for rule in config:
         msg = of.ofp_flow_mod()
         match = of.ofp_match()
@@ -110,33 +138,7 @@ class Tutorial (object):
             print "Inserting flow for: " + msg.__str__()
         self.connection. send(msg)
 
-    if(DEBUGMODE):
-	print "Inserting icmp packet flow"
-    # add rule to allow ALL ICMP packets
-    setupProtocolFlow(self, pkt.ipv4.ICMP_PROTOCOL, pkt.ethernet.IP_TYPE)
 
-    if(DEBUGMODE):
-	print "Inserting arp packet flows"
-    # add rule to allow ALL ARP packets
-    setupProtocolFlow(self, pkt.arp.REQUEST, pkt.ethernet.ARP_TYPE)
-    setupProtocolFlow(self, pkt.arp.REPLY, pkt.ethernet.ARP_TYPE)
-    setupProtocolFlow(self, pkt.arp.REV_REQUEST, pkt.ethernet.ARP_TYPE)
-    setupProtocolFlow(self, pkt.arp.REV_REPLY, pkt.ethernet.ARP_TYPE)
-
-    # add rule to drop all packets not previously 
-    msg = of.ofp_flow_mod()
-    match = of.ofp_match()
-    msg.match = match
-    msg.hard_timeout = 0
-    msg.soft_timeout = 0
-    msg.priority = 1
-    action = of.ofp_action_output(port = of.OFPP_NONE)
-    msg.actions.append(action)
-    if(DEBUGMODE):
-	print "Inserting drop packet flow"
-    if (VERBOSEMODE):
-        print "Inserting flow for drop packets: " + msg.__str__()
-    self.connection.send(msg)
 
   def resend_packet (self, packet_in, out_port):
     """
@@ -183,16 +185,17 @@ class Tutorial (object):
     if(VERBOSEMODE):
         print "act_like_switch()"
     print "Packet Type: ", packet.type
-    if packet.type == packet.ARP_TYPE:
-      print "ARP"
+#    if packet.type == packet.ARP_TYPE:
+#      print "ARP"
     if packet.type == packet.IP_TYPE:
       ip_packet = packet.payload
       if ip_packet.protocol == ip_packet.TCP_PROTOCOL:
         tcp_packet = ip_packet.payload
         fields = [str(ip_packet.srcip), str(tcp_packet.srcport), str(ip_packet.dstip), str(tcp_packet.dstport)]
-	if Tutorial.check_config(self, fields):
+	# this doesn't necessarily need to check the config since these packets have already been filtered by the switch
+    if Tutorial.check_config(self, fields):
           allowed = True
-        else:
+    else:
           allowed = False
 
 
@@ -225,11 +228,45 @@ class Tutorial (object):
       self.resend_packet(packet_in, of.OFPP_ALL)
 
 
-
   def _handle_PacketIn (self, event):
+    def installSymmetricFlow(self, packet, packet_in ):
+        def installFlow(self, nw_src, nw_dst, tp_src, tp_dst):
+            msg = of.ofp_flow_mod()
+            match = of.ofp_match()
+            match.nw_src = nw_src
+            match.nw_dst = nw_dst
+            match.tp_src = int(tp_src)
+            match.tp_dst = int(tp_dst)
+            # all packets to match on are TCP
+            match.nw_proto = pkt.ipv4.TCP_PROTOCOL # == 6
+            # specify all packets as IP
+            match.dl_type = pkt.ethernet.IP_TYPE # == 0x0800
+            msg.match = match
+            msg.hard_timeout = 0
+            msg.soft_timeout = 180
+            msg.priority = 49152
+            action = of.ofp_action_output(port = of.OFPP_NORMAL)
+            msg.actions.append(action)
+            if (VERBOSEMODE):
+              print "Inserting flow for: " + msg.__str__()
+            self.connection. send(msg)
+
+        # get the IP packet from the payload
+        ip_packet = packet.payload
+
+        # get the TCP packet from the IP packet
+        tcp_packet = ip_packet.payload
+        #fields = [str(ip_packet.srcip), str(tcp_packet.srcport), str(ip_packet.dstip), str(tcp_packet.dstport)]
+
+        # send a message to the switch to install the forward flow
+        installFlow(self, ip_packet.srcip, ip_packet.dstip, tcp_packet.srcport, tcp_packet.dstport)
+
+        # send a message to the switch to install the reverse flow
+        installFlow(self, ip_packet.dstip, ip_packet.srcip, tcp_packet.dstport, tcp_packet.srcport)
     """
     Handles packet in messages from the switch.
     """
+
     if VERBOSEMODE:
       print "_handle_PacketIn()"
     packet = event.parsed # This is the parsed packet data.
@@ -237,6 +274,10 @@ class Tutorial (object):
       log.warning("Ignoring incomplete packet")
       return
     packet_in = event.ofp # The actual ofp_packet_in message.
+    # the switch should only act_like_a_switch after a rule for
+    # this flow has been pushed to the switch
+    installSymmetricFlow(self, packet, packet_in)
+
     self.act_like_switch(packet, packet_in)
 
 
@@ -276,5 +317,5 @@ dstIP = 2
 dstPort = 3
 
 DEBUGMODE=True # controls printing output like the parse_config output, etc.
-VERBOSEMODE=False # controls printing of the function names when they are called
+VERBOSEMODE=True # controls printing of the function names when they are called
 
