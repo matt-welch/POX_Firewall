@@ -243,7 +243,7 @@ class Tutorial (object):
             match.dl_type = pkt.ethernet.IP_TYPE # == 0x0800
             msg.match = match
             msg.hard_timeout = 0
-            msg.soft_timeout = 180
+            msg.idle_timeout = 180 # previously known as soft_timeout
             msg.priority = 49152
             action = of.ofp_action_output(port = of.OFPP_NORMAL)
             msg.actions.append(action)
