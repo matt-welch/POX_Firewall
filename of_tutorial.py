@@ -50,8 +50,8 @@ class Tutorial (object):
         msg.match = match
         msg.hard_timeout = 0
         msg.soft_timeout = 0
-        msg.priority = 2
-        action = of.ofp_action_output(port = of.OFPP_CONTROLLER)
+        msg.priority = 32768
+        action = of.ofp_action_output(port = of.OFPP_NORMAL)
         msg.actions.append(action)
         if (VERBOSEMODE):
             print "Inserting flow for: " + msg.__str__()
@@ -103,21 +103,40 @@ class Tutorial (object):
         msg.match = match
         msg.hard_timeout = 0
         msg.soft_timeout = 0
-        msg.priority = 2
+        msg.priority = 32768
         action = of.ofp_action_output(port = of.OFPP_CONTROLLER)
         msg.actions.append(action)
         if (VERBOSEMODE):
             print "Inserting flow for: " + msg.__str__()
         self.connection. send(msg)
 
+    if(DEBUGMODE):
+	print "Inserting icmp packet flow"
     # add rule to allow ALL ICMP packets
     setupProtocolFlow(self, pkt.ipv4.ICMP_PROTOCOL, pkt.ethernet.IP_TYPE)
 
+    if(DEBUGMODE):
+	print "Inserting arp packet flows"
     # add rule to allow ALL ARP packets
     setupProtocolFlow(self, pkt.arp.REQUEST, pkt.ethernet.ARP_TYPE)
     setupProtocolFlow(self, pkt.arp.REPLY, pkt.ethernet.ARP_TYPE)
     setupProtocolFlow(self, pkt.arp.REV_REQUEST, pkt.ethernet.ARP_TYPE)
     setupProtocolFlow(self, pkt.arp.REV_REPLY, pkt.ethernet.ARP_TYPE)
+
+    # add rule to drop all packets not previously 
+    msg = of.ofp_flow_mod()
+    match = of.ofp_match()
+    msg.match = match
+    msg.hard_timeout = 0
+    msg.soft_timeout = 0
+    msg.priority = 1
+    action = of.ofp_action_output(port = of.OFPP_NONE)
+    msg.actions.append(action)
+    if(DEBUGMODE):
+	print "Inserting drop packet flow"
+    if (VERBOSEMODE):
+        print "Inserting flow for drop packets: " + msg.__str__()
+    self.connection.send(msg)
 
   def resend_packet (self, packet_in, out_port):
     """
