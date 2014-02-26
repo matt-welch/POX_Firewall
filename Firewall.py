@@ -15,6 +15,7 @@ will drop packets from that flow.
 
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
+from pox.lib.addresses import IPAddr, IPAddr6, EthAddr
 #import pox.lib.packet.packet_base
 #import pox.lib.packet.packet_utils
 import pox.lib.packet as pkt
@@ -100,6 +101,9 @@ class Firewall (object):
     for rule in config:
         msg = of.ofp_flow_mod()
         match = of.ofp_match()
+	# Check for malformed IP address
+	rule[srcIP] = check_ip(rule[srcIP])
+	rule[dstIP] = check_ip(rule[dstIP])
         if rule[srcIP] != 'any':
             match.nw_src = rule[srcIP]
         else:
@@ -289,6 +293,27 @@ def parse_config(configuration):
         config.append(rule)
   if (False):
     print config
+
+
+def check_ip (addr):
+  """
+  Takes an address if the address is in cidr notation and contains a host then the cidr 
+  portion is stripped from the address
+
+  FIXME: This function is badly named.
+  """
+  if VERBOSEMODE:
+    print "check_ip()"
+  s_addr = addr.split('/', 2)
+  if len(s_addr) == 1:
+	return addr
+  a = IPAddr(s_addr[0]).toUnsigned()
+  hm = 32-int(s_addr[1])
+  h = a & ((1<<hm)-1)  
+  if (hm == 0):
+	return addr
+  else:
+	return s_addr[0]
 
 # to call, misc.of_tutorial --configuration=<path to config file>
 def launch (configuration=""):
