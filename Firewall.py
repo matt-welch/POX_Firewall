@@ -134,7 +134,7 @@ class Firewall (object):
         if (VERBOSEMODE):
             print "Inserting flow for: " + msg.__str__()
         self.connection.send(msg)
-
+    print config
 
 
   def resend_packet (self, packet_in, out_port):
@@ -163,9 +163,9 @@ class Firewall (object):
     global config, srcIP, srcPort, dstIP, dstPort
     flag = False
     for rule in config:
-      if fields[srcIP] == rule[srcIP] or rule[srcIP] == 'any':
+      if check_rule(rule[srcIP], fields[srcIP]):
         if fields[srcPort] == rule[srcPort] or rule[srcPort] == 'any':
-          if fields[dstIP] == rule[dstIP] or rule[dstIP] == 'any':
+          if check_rule(rule[dstIP], fields[dstIP]):
             if fields[dstPort] == rule[dstPort] or rule[dstPort] == 'any':
               print rule
               flag = True
@@ -309,11 +309,33 @@ def check_ip (addr):
 	return addr
   a = IPAddr(s_addr[0]).toUnsigned()
   hm = 32-int(s_addr[1])
-  h = a & ((1<<hm)-1)  
-  if (hm == 0):
+  h = a & ((1<<hm)-1)
+  if (h == 0):
 	return addr
   else:
 	return s_addr[0]
+
+def check_rule(rule, pkt):
+  """
+  Takes a rule's address and a packet's address returns true if that address is include in that rule
+  Asume no rules that contain any for the address will not be checked due to logical short-circuiting
+
+  FIXME: This function is also badly named.
+  """
+  if VERBOSEMODE:
+    print "check_rule()"
+  rule = rule.split('/', 2)
+  if rule == 'any':
+    return True
+  if len(rule) == 1:
+    return rule[0] == pkt
+  else:
+    r = IPAddr(rule[0]).toUnsigned() 
+    p = IPAddr(pkt).toUnsigned()
+    m = int(rule[1])
+    m = (((1<<m)-1)<<(32-m))
+    p = p & m
+    return p == r
 
 # to call, misc.of_tutorial --configuration=<path to config file>
 def launch (configuration=""):
@@ -339,6 +361,6 @@ srcPort = 1
 dstIP = 2
 dstPort = 3
 
-DEBUGMODE=True # controls printing output like the parse_config output, etc.
-VERBOSEMODE=True # controls printing of the function names when they are called
+DEBUGMODE=False # controls printing output like the parse_config output, etc.
+VERBOSEMODE=False # controls printing of the function names when they are called
 
