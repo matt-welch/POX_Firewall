@@ -134,7 +134,6 @@ class Firewall (object):
         if (VERBOSEMODE):
             print "Inserting flow for: " + msg.__str__()
         self.connection.send(msg)
-    print config
 
 
   def resend_packet (self, packet_in, out_port):
@@ -361,6 +360,6 @@ srcPort = 1
 dstIP = 2
 dstPort = 3
 
-DEBUGMODE=False # controls printing output like the parse_config output, etc.
-VERBOSEMODE=False # controls printing of the function names when they are called
+DEBUGMODE=True # controls printing output like the parse_config output, etc.
+VERBOSEMODE=True # controls printing of the function names when they are called
 
