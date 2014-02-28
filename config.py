@@ -1,0 +1,16 @@
+import mininet.net
+
+net.get("host1").setIP("10.10.10.6",24)
+net.get("host2").setIP("10.10.10.7",24)
+net.get("host3").setIP("10.10.10.8",24)
+net.get("host4").setIP("10.10.10.9",24)
+net.get("host5").setIP("10.10.10.10",24)
+net.get("host6").setIP("10.10.10.11",24)
+net.get("host7").setIP("10.10.10.12",24)
+net.get("host8").setIP("10.10.10.13",24)
+net.get("host9").setIP("10.10.10.14",24)
+net.get("server1").setIP("10.10.10.1",24)
+net.get("server2").setIP("10.10.10.2",24)
+net.get("server3").setIP("10.10.10.3",24)
+net.get("server4").setIP("10.10.10.4",24)
+net.get("server5").setIP("10.10.10.5",24)

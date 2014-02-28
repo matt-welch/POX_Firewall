@@ -15,7 +15,7 @@ will drop packets from that flow.
 
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
-from pox.lib.addresses import IPAddr, IPAddr6, EthAddr
+from pox.lib.addresses import IPAddr
 #import pox.lib.packet.packet_base
 #import pox.lib.packet.packet_utils
 import pox.lib.packet as pkt
@@ -46,15 +46,15 @@ class Firewall (object):
         msg.priority = 32768
         action = of.ofp_action_output(port = of.OFPP_NORMAL)
         msg.actions.append(action)
-        if (VERBOSEMODE):
-            print "Inserting flow for: " + msg.__str__()
+        if (PRINT_PACKET_CONTENTS):
+            print "Inserting flow for protocol: " + msg.__str__()
         self.connection.send(msg)
 
 
     global config
-    if DEBUGMODE is True:
+    if PRINT_STATUS_INFO is True:
         print config
-    if VERBOSEMODE:
+    if PRINT_FUNCTION_NAMES:
         print ("__init__()")
     # Keep track of the connection to the switch so that we can
     # send it messages!
@@ -68,12 +68,12 @@ class Firewall (object):
     self.mac_to_port = {}
 
     # establish base rules for ICMP, ARP, and dropping unknown packets
-    if(DEBUGMODE):
+    if(PRINT_STATUS_INFO):
         print "Inserting icmp packet flow"
     # add rule to allow ALL ICMP packets
     setupProtocolFlow(self, pkt.ipv4.ICMP_PROTOCOL, pkt.ethernet.IP_TYPE)
 
-    if(DEBUGMODE):
+    if(PRINT_STATUS_INFO):
         print "Inserting arp packet flows"
     # add rule to allow ALL ARP packets
     setupProtocolFlow(self, pkt.arp.REQUEST, pkt.ethernet.ARP_TYPE)
@@ -89,9 +89,9 @@ class Firewall (object):
     msg.soft_timeout = 0
     msg.priority = 1
 
-    if(DEBUGMODE):
+    if(PRINT_STATUS_INFO):
         print "Inserting drop packet flow"
-    if (VERBOSEMODE):
+    if (PRINT_PACKET_CONTENTS):
         print "Inserting flow for drop packets: " + msg.__str__()
     self.connection.send(msg)
 
@@ -101,17 +101,21 @@ class Firewall (object):
     for rule in config:
         msg = of.ofp_flow_mod()
         match = of.ofp_match()
-	# Check for malformed IP address
-	rule[srcIP] = check_ip(rule[srcIP])
-	rule[dstIP] = check_ip(rule[dstIP])
-        if rule[srcIP] != 'any':
-            match.nw_src = rule[srcIP]
-        else:
-            match.nw_src = None
+        # Check for malformed IP address and strip subnet rather than host for a more specific
+        # rule rather than a more general rule
+        rule[srcIP] = clean_ip(rule[srcIP])
+        rule[dstIP] = clean_ip(rule[dstIP])
+        # need to insert destination IP address into match before the srcIP because
+        # of a bug in pox 0.1.0 (betta) that would set the match.nw_src to 0 if set
+        # prior to the nw_dst.
         if rule[dstIP] != 'any':
             match.nw_dst = rule[dstIP]
         else:
             match.nw_dst = None
+        if rule[srcIP] != 'any':
+            match.nw_src = rule[srcIP]
+        else:
+            match.nw_src = None
         if rule[srcPort] != 'any':
             match.tp_src = int(rule[srcPort]) # must convert the string to an int??
         else:
@@ -131,7 +135,7 @@ class Firewall (object):
         msg.priority = priority
         action = of.ofp_action_output(port = of.OFPP_CONTROLLER)
         msg.actions.append(action)
-        if (VERBOSEMODE):
+        if (PRINT_PACKET_CONTENTS):
             print "Inserting flow for: " + msg.__str__()
         self.connection.send(msg)
 
@@ -142,7 +146,7 @@ class Firewall (object):
     "packet_in" is the ofp_packet_in object the switch had sent to the
     controller due to a table-miss.
     """
-    if VERBOSEMODE:
+    if PRINT_FUNCTION_NAMES:
         print "resend_packet()"
     msg = of.ofp_packet_out()
     msg.data = packet_in
@@ -156,7 +160,7 @@ class Firewall (object):
 
 
   def check_config (self, fields):
-    if VERBOSEMODE:
+    if PRINT_FUNCTION_NAMES:
         print "check_config()"
     print fields
     global config, srcIP, srcPort, dstIP, dstPort
@@ -166,7 +170,8 @@ class Firewall (object):
         if fields[srcPort] == rule[srcPort] or rule[srcPort] == 'any':
           if check_rule(rule[dstIP], fields[dstIP]):
             if fields[dstPort] == rule[dstPort] or rule[dstPort] == 'any':
-              print rule
+              if(PRINT_STATUS_INFO):
+                print "Incoming packet Matched Rule: ",rule
               flag = True
               break
     return flag
@@ -190,8 +195,8 @@ class Firewall (object):
         if allowed:
             action = of.ofp_action_output(port = of.OFPP_NORMAL)
             msg.actions.append(action)
-        if (VERBOSEMODE):
-          print "Inserting flow for: " + msg.__str__()
+        if (PRINT_PACKET_CONTENTS):
+          print "Inserting flow for rule: " + msg.__str__()
         self.connection.send(msg)
 
     # get the IP packet from the payload
@@ -213,7 +218,7 @@ class Firewall (object):
     packet.src is (ethernet) source IP, packet.dst is (ethernet) dest IP
     packet_in.in_port is switch port it arrived on
     """
-    if(VERBOSEMODE):
+    if(PRINT_FUNCTION_NAMES):
         print "act_like_switch()"
     print "Packet Type: ", packet.type
 #    if packet.type == packet.ARP_TYPE:
@@ -232,46 +237,13 @@ class Firewall (object):
     # install symmetric flows for the source and destination of the packet
     Firewall.installSymmetricFlow(self, packet, packet_in, allowed)
 
-    '''
-    # Learn the port for the source MAC
-    self.mac_to_port[packet.src] = packet_in.in_port
-    if DEBUGMODE:
-        print self.mac_to_port
-
-
-    if packet.dst in self.mac_to_port: # the port associated with the destination MAC of the packet is known:
-        # Send packet out the associated port
-      self.resend_packet(packet_in, self.mac_to_port[packet.dst])
-
-      log.debug("Installing flow...from " + str(packet.src) + ", " + str(packet_in.in_port) + " to " + str(packet.dst) + ", " +  str(self.mac_to_port[packet.dst]))
-
-      msg = of.ofp_flow_mod()
-
-      # Set fields to match received packet
-      msg.match = of.ofp_match.from_packet(packet)
-
-      #< Set other fields of flow_mod (timeouts? buffer_id?) >
-      msg.idle_timeout = 180
-      msg.hard_timeout = 0
-      msg.match.buffer_id = packet_in.buffer_id
-      #< Add an output action, and send -- similar to resend_packet() >
-      action = of.ofp_action_output(port = self.mac_to_port[packet.dst])
-      msg.actions.append(action)
-      self.connection.send(msg)
-    else:
-      # Flood the packet out everything but the input port
-      # This part looks familiar, right?
-      if DEBUGMODE:
-          print "Broadcasting packet on switches"
-      self.resend_packet(packet_in, of.OFPP_ALL)
-    '''
 
   def _handle_PacketIn (self, event):
     """
     Handles packet in messages from the switch.
     """
 
-    if VERBOSEMODE:
+    if PRINT_FUNCTION_NAMES:
       print "_handle_PacketIn()"
     packet = event.parsed # This is the parsed packet data.
     if not packet.parsed:
@@ -282,7 +254,7 @@ class Firewall (object):
 
 
 def parse_config(configuration):
-  if VERBOSEMODE:
+  if PRINT_FUNCTION_NAMES:
       print "parse_config()"
   global config
   fin = open(configuration)
@@ -294,25 +266,24 @@ def parse_config(configuration):
     print config
 
 
-def check_ip (addr):
+def clean_ip (cidrAddress):
   """
-  Takes an address if the address is in cidr notation and contains a host then the cidr 
-  portion is stripped from the address
-
-  FIXME: This function is badly named.
+  Takes an address if the address is in CIDR notation and contains uintAddress hostAddress then the netmask
+  portion is stripped from the address so that the address may be installed as an IP address
+  in uintAddress flow (e.g. 192.168.1.4/24 ==> 192.168.1.4)
   """
-  if VERBOSEMODE:
-    print "check_ip()"
-  s_addr = addr.split('/', 2)
-  if len(s_addr) == 1:
-	return addr
-  a = IPAddr(s_addr[0]).toUnsigned()
-  hm = 32-int(s_addr[1])
-  h = a & ((1<<hm)-1)
-  if (h == 0):
-	return addr
+  if PRINT_FUNCTION_NAMES:
+    print "clean_ip()"
+  strAddress = cidrAddress.split('/', 2)
+  if len(strAddress) == 1:
+	return cidrAddress
+  uintAddress = IPAddr(strAddress[0]).toUnsigned()
+  hostMask = 32-int(strAddress[1])
+  hostAddress = uintAddress & ( (1<<hostMask) - 1 )
+  if (hostAddress == 0):
+	return cidrAddress
   else:
-	return s_addr[0]
+	return strAddress[0]
 
 def check_rule(rule, pkt):
   """
@@ -321,15 +292,17 @@ def check_rule(rule, pkt):
 
   FIXME: This function is also badly named.
   """
-  if VERBOSEMODE:
+  if PRINT_FUNCTION_NAMES:
     print "check_rule()"
   rule = rule.split('/', 2)
-  if rule == 'any':
+  if rule[0] == 'any':
+    if (PRINT_STATUS_INFO):
+      print "Match on rule: <",rule,">"
     return True
   if len(rule) == 1:
     return rule[0] == pkt
   else:
-    r = IPAddr(rule[0]).toUnsigned() 
+    r = IPAddr(rule[0]).toUnsigned()
     p = IPAddr(pkt).toUnsigned()
     m = int(rule[1])
     m = (((1<<m)-1)<<(32-m))
@@ -341,12 +314,12 @@ def launch (configuration=""):
   """
   Starts the component
   """
-  if VERBOSEMODE:
+  if PRINT_FUNCTION_NAMES:
       print "launch()"
   parse_config(configuration) #calls parseconfig method and passes string from command line
 
   def start_switch (event):
-    if  VERBOSEMODE:
+    if  PRINT_FUNCTION_NAMES:
         print("start_switch()")
     log.debug("Controlling %s" % (event.connection,))
     Firewall(event.connection)
@@ -360,6 +333,6 @@ srcPort = 1
 dstIP = 2
 dstPort = 3
 
-DEBUGMODE=True # controls printing output like the parse_config output, etc.
-VERBOSEMODE=True # controls printing of the function names when they are called
-
+PRINT_STATUS_INFO=True # controls printing output like the parse_config output, etc.
+PRINT_FUNCTION_NAMES=True # controls printing of the function names when they are called
+PRINT_PACKET_CONTENTS=True # controls printing of packet or match contents
