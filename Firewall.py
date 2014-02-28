@@ -16,8 +16,6 @@ will drop packets from that flow.
 from pox.core import core
 import pox.openflow.libopenflow_01 as of
 from pox.lib.addresses import IPAddr
-#import pox.lib.packet.packet_base
-#import pox.lib.packet.packet_utils
 import pox.lib.packet as pkt
 log = core.getLogger()
 
@@ -30,8 +28,15 @@ class Firewall (object):
   """
 
   def __init__ (self, connection):
+    """
+    Automatic funcitno called when the switch connects to the controller.
+    Function installs flows for ICMP, ARP, and rules read in from the configuration file
+    """
 
     def setupProtocolFlow (self, nw_proto, dl_type):
+        """
+        generic flow-installing function used for ICMP and ARP packet flows
+        """
         msg = of.ofp_flow_mod()
         match = of.ofp_match()
         match.nw_src = None
@@ -160,15 +165,19 @@ class Firewall (object):
 
 
   def check_config (self, fields):
+    """
+    check_config() matches packets against incoming rules.  This function is not
+    strictly necessary but is useful to verify which rules are bing matched.
+    """
     if PRINT_FUNCTION_NAMES:
         print "check_config()"
     print fields
     global config, srcIP, srcPort, dstIP, dstPort
     flag = False
     for rule in config:
-      if check_rule(rule[srcIP], fields[srcIP]):
+      if verifyPacketAgainstRule(rule[srcIP], fields[srcIP]):
         if fields[srcPort] == rule[srcPort] or rule[srcPort] == 'any':
-          if check_rule(rule[dstIP], fields[dstIP]):
+          if verifyPacketAgainstRule(rule[dstIP], fields[dstIP]):
             if fields[dstPort] == rule[dstPort] or rule[dstPort] == 'any':
               if(PRINT_STATUS_INFO):
                 print "Incoming packet Matched Rule: ",rule
@@ -177,7 +186,16 @@ class Firewall (object):
     return flag
 
   def installSymmetricFlow (self, packet, packet_in, allowed):
+    """
+    installSymmetricFlow() installs flows in both directions for an incoming
+    packet that matched a firewall rule
+    """
     def installFlow (self, nw_src, nw_dst, tp_src, tp_dst, allowed):
+        """
+        installFlow() creates a flow for a particular source+port & dest+port
+        packet that matched a firewall rule.  It may also create drop rules
+        signified by an empty action if the packet is not "allowed"
+        """
         msg = of.ofp_flow_mod()
         match = of.ofp_match()
         match.nw_src = nw_src
@@ -254,6 +272,17 @@ class Firewall (object):
 
 
 def parse_config(configuration):
+  """
+  Read the configuration file into a list of lists
+  Assumes the configuration file (e.g. firewall.config) has rules that are correctly formatted
+  as:  <ip> [ / <netmask> ] <port> <ip> [ / <netmask> ] <port>
+  where any of the IP or port fields may be replaced with any and all fields are separated by
+  a single space.
+  Items in angle brackets (<>) represent variable values, items in square brackets ([]) represent
+  optional syntax, and an unquoted character (e.g., the / character) represents itself.
+  All whitespace will be a single ASCII space character, all newlines will be a single ASCII
+  newline character (0x0a). Empty lines, i.e., two newlines back-to-back) are permitted.
+  """
   if PRINT_FUNCTION_NAMES:
       print "parse_config()"
   global config
@@ -268,9 +297,10 @@ def parse_config(configuration):
 
 def clean_ip (cidrAddress):
   """
-  Takes an address if the address is in CIDR notation and contains uintAddress hostAddress then the netmask
-  portion is stripped from the address so that the address may be installed as an IP address
-  in uintAddress flow (e.g. 192.168.1.4/24 ==> 192.168.1.4)
+  Takes an address if the address is in CIDR notation and contains uintAddress
+  hostAddress then the netmask portion is stripped from the address so that the
+  address may be installed as an IP address in uintAddress flow
+  (e.g. 192.168.1.4/24 becomes 192.168.1.4)
   """
   if PRINT_FUNCTION_NAMES:
     print "clean_ip()"
@@ -285,15 +315,16 @@ def clean_ip (cidrAddress):
   else:
 	return strAddress[0]
 
-def check_rule(rule, pkt):
+def verifyPacketAgainstRule(rule, pkt):
   """
-  Takes a rule's address and a packet's address returns true if that address is include in that rule
-  Asume no rules that contain any for the address will not be checked due to logical short-circuiting
+  Takes a rule's address and a packet's address returns true if that address is
+  included in that rule.  Assume no rules that contain any for the address will
+  not be checked due to logical short-circuiting
 
-  FIXME: This function is also badly named.
+  formerly check_rule()
   """
   if PRINT_FUNCTION_NAMES:
-    print "check_rule()"
+    print "verifyPacketAgainstRule()"
   rule = rule.split('/', 2)
   if rule[0] == 'any':
     if (PRINT_STATUS_INFO):
@@ -316,7 +347,7 @@ def launch (configuration=""):
   """
   if PRINT_FUNCTION_NAMES:
       print "launch()"
-  parse_config(configuration) #calls parseconfig method and passes string from command line
+  parse_config(configuration) #calls parse_config method and passes string from command line
 
   def start_switch (event):
     if  PRINT_FUNCTION_NAMES:
@@ -333,6 +364,6 @@ srcPort = 1
 dstIP = 2
 dstPort = 3
 
-PRINT_STATUS_INFO=True # controls printing output like the parse_config output, etc.
-PRINT_FUNCTION_NAMES=True # controls printing of the function names when they are called
+PRINT_STATUS_INFO=True     # controls printing output like the parse_config output, etc.
+PRINT_FUNCTION_NAMES=True  # controls printing of the function names when they are called
 PRINT_PACKET_CONTENTS=True # controls printing of packet or match contents
