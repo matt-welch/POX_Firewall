@@ -29,7 +29,7 @@ class Firewall (object):
 
   def __init__ (self, connection):
     """
-    Automatic funcitno called when the switch connects to the controller.
+    Automatic funciton called when the switch connects to the controller.
     Function installs flows for ICMP, ARP, and rules read in from the configuration file
     """
 
@@ -167,7 +167,7 @@ class Firewall (object):
   def check_config (self, fields):
     """
     check_config() matches packets against incoming rules.  This function is not
-    strictly necessary but is useful to verify which rules are bing matched.
+    strictly necessary but is useful to verify which rules are being matched.
     """
     if PRINT_FUNCTION_NAMES:
         print "check_config()"
