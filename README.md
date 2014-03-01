@@ -23,7 +23,7 @@ Open a terminal and launch mininet with the tested topology:
 
 Run the IP configuration script inside mininet to set up IP addresses of hosts
 
-	mininet> py execfile("/path/to/config.py")1
+	mininet> py execfile("/path/to/config.py")
 
 Open another terminal, navigate to the pox directory and launch the POX controller with the Firewall module:
 
@@ -62,4 +62,57 @@ Some advanced options
 
 Design Methodology
 ------------------
+TODO: ensure spelling is correct in word
+The design of the firewalll can be sumamrized as follows.  The controller
+proactively loads a set of rules onto the switch to act as a primary filter on
+incoming packets.  Only packets matching rules on the switch are then forwarded
+to the controller which installs bidirectional flows on the switch to enable
+that traffic.  This design requires the switch to handle the majority of traffic
+as it should and only send data to the controller as necessary.  This should
+allow the controller to scale to control a larger number of switches and the
+corresponding increase in new flows.
 
+Detailed Algorithm Description
+------------------------------
+1)	On startup, the controller reads the configuration rules specified on the
+	command line into memory and listens for a switch to connect on the default
+	port 6633.
+
+2) 	Once a switch has connected, the controller loads rules onto the switch to allow
+	ICMP and ARP packets to pass through unimpeded.  It also installs rules that
+	instruct the switch to forward packets matching the configuration file rules
+	to the controller for further consideration. These rules should be of the form:
+
+		<ip> [ / <netmask> ] <port> <ip> [ / <netmask> ] <port>
+
+	where any of the IP or port fields may be replaced with the wildcard 'any'
+	and all fields are separated by a single space.
+	The configuration file is further detailed in Firewall.py.
+	The final rule installed to the switch on the initial phase	instructs the
+	switch to drop all TCP packets that do not match the previous rules. These
+	are specified by a rule with no action.
+	When the rules are sent to the switch, they are further conditioned so that
+	any rule that contains a non-zero host IP and subnet mask in CIDR notation
+	is stripped	of the subnet mask and sent as a source IP only.  This is because
+	POX expects only a host IP without netmask or network IP address with netmask
+	and will cause an exception if a rule is set with an IP address containing a
+	non-zero host IP and netmask.  The choice when reading these rules is thus to
+	drop the host portion of the IP address or drop the netmask.  It was decided
+	that masking off the host portion in favor of keeping the netmask would result
+	in a more general rule than was intended which is in conflict with the design
+	of a firewall.  If the subnet rule is desired, it should be specified as a
+	network address only with a host address of zero.
+
+3)	After the proactive rule set has been sent to the switch, the switch waits
+	for incoming conenctions that match its rule set and forwards those matching
+	packets to the controller as appropriate.
+
+4)	When the controller receives encapsulated packets from the switch, these
+	packets are compared against the rule set for debugging purposes.  These
+	packets should be allowed flows since they have already made it past the
+	primary filtering by the switch.  Packets are matched with a configuration
+	rule and a bidirectional (symmetric) pair of flows is installed to allow
+	TCP traffic between the originating source host and its intended destination
+	host.  The encapsulated packet representing the flow is also returned to
+	the switch for forwarding to its intended destination.  If the encapsulated
+	packet does not match the rule set, it is dropped.

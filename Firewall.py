@@ -29,7 +29,7 @@ class Firewall (object):
 
   def __init__ (self, connection):
     """
-    Automatic funciton called when the switch connects to the controller.
+    Automatic function called when the switch connects to the controller.
     Function installs flows for ICMP, ARP, and rules read in from the configuration file
     """
 
@@ -145,7 +145,7 @@ class Firewall (object):
         self.connection.send(msg)
 
 
-  def resend_packet (self, packet_in, out_port):
+  def resend_packet (self, packet):
     """
     Instructs the switch to resend a packet that it had sent to us.
     "packet_in" is the ofp_packet_in object the switch had sent to the
@@ -154,9 +154,10 @@ class Firewall (object):
     if PRINT_FUNCTION_NAMES:
         print "resend_packet()"
     msg = of.ofp_packet_out()
-    msg.data = packet_in
+    msg.data = packet
 
-    # Add an action to send to the specified port
+    # Add an action for the switch to handle the packet normally
+    out_port = of.OFPP_NORMAL
     action = of.ofp_action_output(port = out_port)
     msg.actions.append(action)
 
@@ -230,6 +231,9 @@ class Firewall (object):
     # send a message to the switch to install the reverse flow
     installFlow(self, ip_packet.dstip, ip_packet.srcip, tcp_packet.dstport, tcp_packet.srcport, allowed)
 
+    # re-send the first packet of the flow
+    Firewall.resend_packet (self, packet)
+
   def act_like_firewall (self, packet, packet_in):
     """
     Implement firewall-like behavior.
@@ -239,8 +243,7 @@ class Firewall (object):
     if(PRINT_FUNCTION_NAMES):
         print "act_like_switch()"
     print "Packet Type: ", packet.type
-#    if packet.type == packet.ARP_TYPE:
-#      print "ARP"
+
     if packet.type == packet.IP_TYPE:
       ip_packet = packet.payload
       if ip_packet.protocol == ip_packet.TCP_PROTOCOL:
@@ -349,12 +352,12 @@ def launch (configuration=""):
       print "launch()"
   parse_config(configuration) #calls parse_config method and passes string from command line
 
-  def start_switch (event):
+  def start_firewall (event):
     if  PRINT_FUNCTION_NAMES:
-        print("start_switch()")
+        print("start_firewall()")
     log.debug("Controlling %s" % (event.connection,))
     Firewall(event.connection)
-  core.openflow.addListenerByName("ConnectionUp", start_switch)
+  core.openflow.addListenerByName("ConnectionUp", start_firewall)
 
 
 config = [] #declaring it here puts it in the "main" frame so it can be referred to globally
