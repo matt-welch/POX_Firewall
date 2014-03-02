@@ -44,7 +44,7 @@ In the switch, set up a watch on the flow list with a 1 second interval
 
 	root@mininet:~# watch -n 1 sudo ovx-ofctl dump-flows s3
 
-In this example, host9 will open an xterm window and will have th IP address of
+In this example, host9 will open an xterm window and will have the IP address of
 10.10.10.14/24.  Host1 will open with IP address 10.10.10.6/24.  Note, these
 hosts were chosen because they match a firewall rule in mininet_firewall.config.
 
