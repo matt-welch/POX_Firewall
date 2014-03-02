@@ -59,9 +59,6 @@ From Host1, connect to the netcat listener at host9, port 6666
 You should see flows added to the flow list on the switch output and status
 messages in the controller.
 
-Some advanced options
----------------------
-
 Design Methodology
 ------------------
 The design of the firewall can be summarized as follows.  The controller
